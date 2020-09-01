@@ -3,7 +3,7 @@ from django.db import models
 
 class CatanEvent(models.Model):
     event = models.OneToOneField("board_game_site.GameEvent", on_delete=models.CASCADE)
-    state = models.CharField(max_length=30)
+    state = models.CharField(max_length=30, null=True, blank=True)
     turn = models.ForeignKey("registry.User", on_delete=models.SET_NULL, null=True, blank=True, default=None)
     all_knight_card = models.IntegerField(default=14)
     all_victory_card = models.IntegerField(default=5)
@@ -28,6 +28,19 @@ class PlayerGame(models.Model):
     victory_point = models.IntegerField(default=0)
     knight = models.IntegerField(default=0)
     knight_card_played = models.IntegerField(default=0)
+
+    def next(self, reverse=False):
+        if reverse:
+            players = PlayerGame.objects.filter(catan_event=self.catan_event).reverse()
+        else:
+            players = PlayerGame.objects.filter(catan_event=self.catan_event)
+
+        for index, player in enumerate(players):
+            if player == self.player:
+                if index == 3:
+                    return players[0].id
+                else:
+                    return players[index + 1].id
 
     class Meta:
         unique_together = ["catan_event", "player"]
@@ -59,8 +72,9 @@ class Settlement(models.Model):
     kind = models.CharField(max_length=4, choices=CHOICES)
 
 
+
+
 class Road(models.Model):
     player_game = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
     vertex1 = models.IntegerField()
     vertex2 = models.IntegerField()
-

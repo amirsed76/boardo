@@ -7,8 +7,13 @@ from rest_framework.response import Response
 from rest_framework.filters import SearchFilter
 from rest_framework import status
 from . import serializers, models
-from django.http import Http404
+from django.http import Http404, HttpResponse
 import random
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+from . import functions
+from rest_framework.views import APIView
+from django.shortcuts import redirect
 
 
 # Create your views here.
@@ -24,37 +29,54 @@ class CatanEventCreateApiView(generics.CreateAPIView):
     queryset = models.CatanEvent.objects.all()
 
 
-# models.PlayerGame
-
-class PlayerGameCreateApiView(generics.CreateAPIView):
+class LoginGameAPIView(generics.CreateAPIView):
     serializer_class = serializers.PlayerGameSerializer
     permission_classes = [permissions.IsAuthenticated]
     queryset = models.PlayerGame.objects.all()
+
+    def validate(self, catan_event):
+        if models.PlayerGame.objects.filter(player=self.request.user,
+                                            catan_event=catan_event).exists():
+            return Response({"value": "you are currently login"})
+        if self.request.data["password"] != catan_event.event.password:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if models.PlayerGame.objects.filter(catan_event=catan_event).count() > 4:
+            return Response({"value": "capacity is full"})
+
+    @staticmethod
+    def start_game(room_name, catan_event):
+        functions.send_message(message="game_started", room_name=room_name)
+        player1 = models.PlayerGame.objects.filter(catan_event=catan_event)[0].player
+
+        serializers.CatanEventSerializer().update(
+            instance=models.CatanEvent.objects.get(event__room_name=room_name),
+            validated_data={"state": "init1",
+                            "turn": player1})
+
+        functions.send_message(message={"turn": player1.id, "action": "init1"}, room_name=room_name)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            if models.PlayerGame.objects.filter(player=self.request.user,
-                                                catan_event__event__room_name=kwargs["room_name"]).exists():
-                return Response({"value": "you are currently login"})
             catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
-            if self.request.data["password"] != catan_event.event.password:
-                return Response(status=status.HTTP_403_FORBIDDEN)
+            result_validate = self.validate(catan_event=catan_event)
+            if result_validate is not None:
+                return result_validate
+            serializer.save(player=self.request.user, catan_event=catan_event)
 
-            if models.PlayerGame.objects.filter(catan_event=catan_event).count() > 4:
-                return Response({"value": "capacity is full"})
+            functions.send_message(message="one player added", room_name=kwargs["room_name"])
 
-            self.perform_create(serializer, catan_event)
+            if models.PlayerGame.objects.filter(catan_event=catan_event).count() == 4:
+                catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+                self.start_game(room_name=kwargs["room_name"], catan_event=catan_event)
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
         except Exception as e:
-            print("xxxxxx", e)
+            print(e)
             return Response(status=status.HTTP_404_NOT_FOUND)
-
-    def perform_create(self, serializer, catan_event):
-        serializer.save(player=self.request.user, catan_event=catan_event)
 
 
 class PersonalInformation(generics.RetrieveAPIView):
@@ -102,7 +124,6 @@ class TileListAPIVIew(generics.ListAPIView):
 
 class PlayerInformationListAPIView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
-
     serializer_class = serializers.PlayerInformationSerializer
     queryset = models.PlayerGame.objects.all()
 
@@ -118,11 +139,100 @@ class PlayerInformationListAPIView(generics.ListAPIView):
         return Response(serializer.data)
 
 
+class Init1APIView(generics.CreateAPIView):
+    serializer_class = serializers.Init1ActionSerializer
+    permission_classes = [permissions.IsAuthenticated]  # TODO permission for init1
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        player_game = models.PlayerGame.objects.get(catan_event=catan_event, player=self.request.user)
+        serializer.save(room_name=kwargs["room_name"], player_game=player_game)
+        functions.send_message(message={"action": "init1", "args": serializer.data}, room_name=kwargs["room_name"])
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        functions.send_message(message={
+            "turn": catan_event.turn.id, "action": catan_event.state, "args": {}}, room_name=kwargs["room_name"])
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class Init2APIView(generics.CreateAPIView):
+    serializer_class = serializers.Init2ActionSerializer
+    permission_classes = [permissions.IsAuthenticated]  # TODO permission for init2
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        player_game = models.PlayerGame.objects.get(catan_event=catan_event, player=self.request.user)
+        serializer.save(room_name=kwargs["room_name"], player_game=player_game)
+        functions.send_message(message={"action": "init2", "args": serializer.data}, room_name=kwargs["room_name"])
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        functions.send_message(message={
+            "turn": catan_event.turn.id, "action": catan_event.state, "args": {}}, room_name=kwargs["room_name"])
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+# class PlayDevelopmentCard(APIView):
+#     def post(self, request, format=None):
+#         kind = request.data("kind")
+#         if kind == "knight":
+#             pass
+#         if kind == "monopoly":
+#             pass
+#         if kind == "road_building":
+#             pass
+#         if kind == "year_of_plenty":
+#             pass
+class PlayKnightCard(APIView):
+    # TODO knight card
+    pass
+
+
+# class PlayYearOfPlenty(generics.UpdateAPIView):
+class PlayYearOfPlenty(APIView):
+    # permission_classes = [permissions.IsAuthenticated]  # TODO  permission for year of plenty
+    serializer_class = serializers.YearOfPlentySerializer
+
+    def post(self, request, *args, **kwargs):
+        player_game = models.PlayerGame.objects.get(player=self.request.user,
+                                                    catan_event__event__room_name=kwargs["room_name"])
+        serializer = self.serializer_class(instance=player_game, data=request.data,
+                                           partial=True)
+
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        functions.send_message(
+            message={"action": "play_year_of_plenty",
+                     "args": {"resource1": request.data["resource1"], "resource2": request.data["resource2"]}},
+            room_name=kwargs["room_name"])
+
+        functions.send_message(
+            message={"turn": catan_event.turn.id, "action": catan_event.state, "args": {}},
+            room_name=kwargs["room_name"])
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# def update(self, request, *args, **kwargs):
+
+
 class DiceAPIView(generics.GenericAPIView):
     def post(self, *args, **kwargs):
         dice1 = random.randint(1, 6)
         dice2 = random.randint(1, 6)
         # TODO allocate resorces
+        tiles = models.Tile.objects.filter(number=dice1 + dice2)
+        vertex_indexes = []
+        for tile in tiles:
+            vertex_indexes.extend(functions.tile2vertexes(tile.identify))
+        settlements = models.Settlement.objects.filter(vertex__in=vertex_indexes)
+        # TODO allocate resources
+
+        # for settlement in settlements:
+        #     serializers.PlayerGameUpdateSerializer().update(instance=settlement.player_game ,{})
         return Response({"dice1": dice1, "dice2": dice2})
 
 
@@ -134,17 +244,11 @@ class HomeCreateAPIView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer, kwargs["room_name"])
+        serializer.save(kind="home",
+                        player_game=models.PlayerGame.objects.get(catan_event__event__room_name=kwargs["room_name"],
+                                                                  player=self.request.user))
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-
-    def perform_create(self, serializer, room_name):
-        try:
-            serializer.save(kind="home",
-                            player_game=models.PlayerGame.objects.get(catan_event__event__room_name=room_name,
-                                                                      player=self.request.user))
-        except:
-            pass
 
 
 class CityUpdateAPIView(generics.UpdateAPIView):
@@ -154,5 +258,3 @@ class CityUpdateAPIView(generics.UpdateAPIView):
 
     def perform_update(self, serializer):
         serializer.save(kind="city")
-
-# class BuyDevelopmentCardCreate

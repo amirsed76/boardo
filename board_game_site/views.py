@@ -18,5 +18,14 @@ class GameListAPIVies(generics.ListAPIView):
 class GameRetrieveAPIView(generics.RetrieveAPIView):
     serializer_class = serializers.GameDetailSerializer
     queryset = models.Game.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = []
+
+    # def retrieve(self, request, *args, **kwargs):
+
+    def get_serializer(self, *args, **kwargs):
+        serializer_class = self.get_serializer_class()
+        kwargs['context'] = self.get_serializer_context()
+        return serializer_class(*args, **kwargs)
+    # def get_serializer_class(self):
+    # def retrieve(self, request, *args, **kwargs):
 

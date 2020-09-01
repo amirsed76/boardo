@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 import os
 import datetime
 import locale
+from . import disable
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 WSGI_APPLICATION = 'site_bazi.wsgi.application'
@@ -65,14 +66,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'corsheaders.middleware.CorsPostCsrfMiddleware'
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
 ]
+
 
 ROOT_URLCONF = 'site_bazi.urls'
 
@@ -216,16 +218,14 @@ TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]
 REST_FRAMEWORK = {
 
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
 
     ),
     'DEFAULT_PAGINATION_CLASS':
         'rest_framework.pagination.LimitOffsetPagination'
 }
 
-
 REST_USE_JWT = False
 
-
-TEMPLATE_LOADERS=["django.template.loaders.filesystem.Loader"]
+TEMPLATE_LOADERS = ["django.template.loaders.filesystem.Loader"]

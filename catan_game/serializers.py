@@ -3,75 +3,13 @@ from rest_framework import serializers
 import board_game_site.serializers  as board_game_serializers
 import board_game_site.models  as board_game_models
 import random
-
-
-def create_world(catan_event):
-    RESOURSESE = {
-        ("brick", "brick"),  # 3
-        ("sheep", "sheep"),  # 4
-        ("stone", "stone"),  # 3
-        ("wheat", "wheat"),  # 4
-        ("wood", "wood"),  # 4
-        ("desert", "desert")  # 1
-    }
-    resources = []
-    for i in range(0, 3):
-        resources.append("brick")
-    for i in range(0, 4):
-        resources.append("sheep")
-    for i in range(0, 3):
-        resources.append("stone")
-    for i in range(0, 3):
-        resources.append("stone")
-    for i in range(0, 4):
-        resources.append("wheat")
-    for i in range(0, 4):
-        resources.append("wood")
-    resources.append("desert")
-    random.shuffle(resources)
-    numbers = shuffle_numbers()
-    j = 0
-    for i in range(1, 20):
-        resource = resources[i - 1]
-        number = j
-        if resource == "desert":
-            number = 7
-        else:
-            j += 1
-        TileSerializer().create(
-            validated_data={"catan_event": catan_event, "identify": i, "resource": resource,
-                            "number": number})
-
-
-def shuffle_numbers():
-    t1 = [2, 4, 5]
-    t2 = [1, 3, 5, 6]
-    t3 = [2, 6, 7]
-    t4 = [1, 5, 8, 9]
-    t5 = [1, 2, 4, 6, 9, 10]
-    t6 = [2, 3, 5, 7, 10, 11]
-    t7 = [3, 6, 11, 12]
-    t8 = [4, 9, 13]
-    t9 = [4, 5, 8, 10, 13, 14]
-    t10 = [5, 6, 9, 11, 14, 15]
-    t11 = [6, 7, 10, 12, 15, 16]
-    t12 = [7, 11, 16]
-    t13 = [8, 9, 14, 17]
-    t14 = [9, 10, 13, 15, 17, 18]
-    t15 = [10, 11, 14, 16, 18, 19]
-    t16 = [11, 12, 15, 19]
-    t17 = [13, 14, 18]
-    t18 = [14, 15, 17, 19]
-    t19 = [15, 16, 18]
-    tiles = [t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19]
-    result = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12, 7]
-
-    # TODO write shuffle
-    return [10, 2, 9, 12, 6, 14, 10, 9, 11, 7, 3, 8, 8, 3, 4, 5, 5, 6, 11]
+import registry.models as registry_models
+from . import functions
 
 
 class CatanEventSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    room_name = serializers.CharField(read_only=True, source="event.room_name")
+    password = serializers.CharField(read_only=True, source="event.password")
     room_name = serializers.CharField(read_only=True, source="event.room_name")
 
     class Meta:
@@ -83,17 +21,23 @@ class CatanEventSerializer(serializers.ModelSerializer):
         game = board_game_models.Game.objects.get(slug="catan")
         board_game_game_event_validate_data = {
             "game": game,
-            "password": validated_data["password"]
+            "password": functions.get_random_string()
         }
 
         event = board_game_serializers.GameEventSerializer().create(board_game_game_event_validate_data)
         catan_event_validate_data = validated_data.copy()
-        del catan_event_validate_data["password"]
         catan_event_validate_data["event"] = event
         instance = super(CatanEventSerializer, self).create(catan_event_validate_data)
         # initialize world
-        create_world(catan_event=instance)
+        functions.create_world(catan_event=instance)
         return instance
+
+    def update_state(self, instance, state):
+        self.update(instance=instance, validated_data={"state": state})
+
+    def update_turn(self, instance, user_id):
+        user = registry_models.User.objects.get(pk=user_id)
+        self.update(instance=instance, validated_data={"turn": user})
 
 
 class PlayerGameSerializer(serializers.ModelSerializer):
@@ -195,5 +139,142 @@ class HomeSerializer(serializers.ModelSerializer):
 
 class CitySerializer(serializers.ModelSerializer):
     class Meta:
-        models = models.Settlement
+        model = models.Settlement
         fields = []
+
+
+class RoadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Road
+        fields = ["vertex1", "vertex2"]
+
+
+class Init1ActionSerializer(serializers.ModelSerializer):
+    vertex = serializers.IntegerField()
+    road_v1 = serializers.IntegerField()
+    road_v2 = serializers.IntegerField()
+
+    class Meta:
+        model = models.Settlement
+        fields = ["vertex", "road_v1", "road_v2"]
+
+    def create(self, validated_data):
+        home_instance = HomeSerializer().create(
+            {"player_game": validated_data["player_game"], "vertex": validated_data["vertex"], "kind": "home"})
+
+        RoadSerializer().create({"player_game": validated_data["player_game"], "vertex1": validated_data["road_v1"],
+                                 "vertex2": validated_data["road_v2"]})
+        if validated_data["player_game"] == models.PlayerGame.objects.filter(
+                catan_event=validated_data["player_game"].catan_event).reverse()[0]:
+            state = "init2"
+            turn = validated_data["player_game"].player.id
+        else:
+            state = "init1"
+            turn = validated_data["player_game"].next()
+
+        CatanEventSerializer().update_state(instance=home_instance.player_game.catan_event, state=state)
+        CatanEventSerializer().update_turn(instance=home_instance.player_game.catan_event, user_id=turn)
+
+        return validated_data
+
+    def validate(self, attrs):
+        if attrs["vertex"] not in [attrs["road_v1"], attrs["road_v2"]]:
+            raise serializers.ValidationError("home and road must be near together")
+        # TODO road size must be one
+        # TODO home and road with location not existed
+        return attrs
+
+
+class Init2ActionSerializer(serializers.ModelSerializer):
+    vertex = serializers.IntegerField()
+    road_v1 = serializers.IntegerField()
+    road_v2 = serializers.IntegerField()
+
+    class Meta:
+        model = models.Settlement
+        fields = ["vertex", "road_v1", "road_v2"]
+
+    def create(self, validated_data):
+        home_instance = HomeSerializer().create(
+            {"player_game": validated_data["player_game"], "vertex": validated_data["vertex"], "kind": "home"})
+
+        RoadSerializer().create({"player_game": validated_data["player_game"], "vertex1": validated_data["road_v1"],
+                                 "vertex2": validated_data["road_v2"]})
+        if validated_data["player_game"] == models.PlayerGame.objects.filter(
+                catan_event=validated_data["player_game"].catan_event).reverse()[0]:
+            state = "play_development_card"
+            turn = validated_data["player_game"].player.id
+        else:
+            state = "init2"
+            turn = validated_data["player_game"].next(reverse=True)
+
+        CatanEventSerializer().update_state(instance=home_instance.player_game.catan_event, state=state)
+        CatanEventSerializer().update_turn(instance=home_instance.player_game.catan_event, user_id=turn)
+
+        player_game = home_instance.player_game
+        tile_indexes = functions.vertex2tiles(vertex=validated_data["vertex"])
+
+        Tile_validated_data = {"brick_count": player_game.brick_count,
+                               "sheep_count": player_game.sheep_count,
+                               "stone_count": player_game.stone_count,
+                               "wheat_count": player_game.wheat_count,
+                               "wood_count": player_game.wood_count}
+
+        for tile_index in tile_indexes:
+            tile = models.Tile.objects.get(identify=tile_index, catan_event=home_instance.player_game.catan_event)
+            try:
+                validated_data["{}_count".format(tile.resource)] += 1
+            except:
+                pass
+
+        PlayerGameUpdateSerializer().update(instance=player_game,
+                                            validated_data=Tile_validated_data)
+
+        return validated_data
+
+    def validate(self, attrs):
+        if attrs["vertex"] not in [attrs["road_v1"], attrs["road_v2"]]:
+            raise serializers.ValidationError("home and road must be near together")
+        # TODO road size must be one
+        # TODO home and road with location not existed
+        return attrs
+
+
+class YearOfPlentySerializer(serializers.Serializer):
+    CHOICES = {("brick", "brick"),
+               ("sheep", "sheep"),
+               ("stone", "stone"),
+               ("wheat", "wheat"),
+               ("wood", "wood")}
+    resource1 = serializers.ChoiceField(choices=CHOICES, write_only=True)
+    resource2 = serializers.ChoiceField(choices=CHOICES, write_only=True)
+
+    def update(self, instance, validated_data):
+        for resource in [validated_data["resource1"], validated_data["resource2"]]:
+            if resource == "brick":
+                instance.brick_count += 1
+            elif resource == "sheep":
+                instance.sheep_count += 1
+
+            elif resource == "stone":
+                instance.stone_count += 1
+
+            elif resource == "wheat":
+                instance.wheat_count += 1
+
+            elif resource == "wood":
+                instance.wood_count += 1
+
+        instance.year_of_plenty -= 1
+        instance.save()
+
+        instance.catan_event.state = "dice"
+        instance.catan_event.save()
+
+        return instance
+
+    def create(self, validated_data):
+        pass
+
+
+

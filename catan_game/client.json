@@ -1,8 +1,0 @@
-{
-  "action": {
-    "name": "selected_development_card",
-    "args": {
-      "type": "int"
-    }
-  }
-}

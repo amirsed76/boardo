@@ -17,6 +17,8 @@ class Game(models.Model):
     logo = models.ImageField(upload_to="logo/")
     slug = models.CharField(max_length=50)
     description = models.TextField(null=True, blank=True)
+    long_description=models.TextField(null=True , blank=True)
+    is_active = models.BooleanField(default=False)
 
     def clean(self):
         self.tutorial_doc_clean()

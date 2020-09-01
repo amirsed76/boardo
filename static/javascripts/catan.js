@@ -7,8 +7,9 @@
         + '/'
     );
     chatSocket.onmessage = function (e) {
+    console.log(e.data)
         const data = JSON.parse(e.data);
-        document.querySelector('#chat-log').value += (data.message + '\n');
+        document.querySelector('#chat-log').value += (e.data + '\n');
     };
 
     chatSocket.onclose = function (e) {
