@@ -49,7 +49,7 @@ class PlayerGameSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["catan_event", "player", "brick_count", "sheep_count", "stone_count", "wheat_count",
                             "wood_count", "has_long_road_card", "has_largest_army", "monopoly_count", "year_of_plenty",
-                            "road_building_count", "victory_point", "knight", "knight_card_played"]
+                            "road_building_count", "victory_point", "knight", "knight_card_played", "thief_tile"]
 
     @staticmethod
     def get_point(instance):
@@ -90,11 +90,15 @@ class PlayerInformationSerializer(serializers.ModelSerializer):
     resources = serializers.SerializerMethodField("get_resources", read_only=True)
     point = serializers.SerializerMethodField("get_point", read_only=True)
     road_length = serializers.SerializerMethodField("get_road_length", read_only=True)
+    player_avatar = serializers.ImageField(source="player.avatar.avatar",read_only=True)
+    player_username = serializers.CharField(source="player.username",read_only=True)
 
     class Meta:
         model = models.PlayerGame
+
         fields = ["catan_event", "player", "has_long_road_card", "has_largest_army", "knight_card_played",
-                  "cards", "resources", "point", "road_length"]
+                  "cards", "resources", "point", "road_length","player_avatar","player_username"]
+
         read_only_fields = ["catan_event", "player", "has_long_road_card", "has_largest_army", "knight_card_played",
                             "cards", "resources", "point", "road_length"]
 
@@ -129,24 +133,6 @@ class PlayerGameUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.PlayerGame
         fields = "__all__"
-
-
-class HomeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Settlement
-        fields = ["vertex"]
-
-
-class CitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Settlement
-        fields = []
-
-
-class RoadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = models.Road
-        fields = ["vertex1", "vertex2"]
 
 
 class Init1ActionSerializer(serializers.ModelSerializer):
@@ -277,4 +263,143 @@ class YearOfPlentySerializer(serializers.Serializer):
         pass
 
 
+class RoadBuildingSerializer(serializers.Serializer):
+    road1_vertex1 = serializers.IntegerField(write_only=True)
+    road1_vertex2 = serializers.IntegerField(write_only=True)
+    road2_vertex1 = serializers.IntegerField(write_only=True)
+    road2_vertex2 = serializers.IntegerField(write_only=True)
 
+    def create(self, validated_data):
+        road = models.Road(player_game=validated_data["player_game"], vertex1=validated_data["road1_vertex1"],
+                           vertex2=validated_data["road1_vertex2"])
+        road.save()
+
+        road = models.Road(player_game=validated_data["player_game"], vertex1=validated_data["road2_vertex1"],
+                           vertex2=validated_data["road2_vertex2"])
+        road.save()
+
+        validated_data["player_game"].road_building_count -= 1
+        validated_data["player_game"].save()
+
+        validated_data["player_game"].catan_event.state = "dice"
+        validated_data["player_game"].catan_event.save()
+
+        return validated_data["player_game"]
+
+    def update(self, instance, validated_data):
+        pass
+
+
+class MonopolySerializer(serializers.Serializer):
+    resource = serializers.IntegerField(write_only=True)
+
+    def create(self, validated_data):
+        pass
+
+    def update(self, instance, validated_data):
+        resource = validated_data["resource"]
+        players = models.PlayerGame.objects.filter(catan_event=instance.catan_event)
+        count = 0
+        for player in players:
+            if player == instance:
+                continue
+            else:
+                if resource == "brick":
+                    count += player.brick_count
+                    player.brick_count = 0
+
+                elif resource == "sheep":
+                    count += player.sheep_count
+                    player.sheep_count = 0
+
+                elif resource == "stone":
+                    count += player.sheep_count
+                    player.stone_count = 0
+
+                elif resource == "wheat":
+                    count += player.wheat_count
+                    player.wheat_count = 0
+
+                elif resource == "wood":
+                    count += player.wood_count
+                    player.wood_count = 0
+            player.save()
+
+        if resource == "brick":
+            instance.brick_count += count
+
+        elif resource == "sheep":
+            instance.sheep_count += count
+
+        elif resource == "stone":
+            instance.stone_count += count
+
+        elif resource == "wheat":
+            instance.wheat_count += count
+
+        elif resource == "wood":
+            instance.wood_count += count
+
+        instance.monopoly_count -= 1
+        instance.save()
+
+        instance.catan_event.state = "dice"
+        instance.catan_event.save()
+
+        return instance
+
+
+class KnightSerializer(serializers.Serializer):
+    tile = serializers.IntegerField()
+
+    def update(self, instance, validated_data):
+        instance.knight -= 1
+        instance.knight_card_played += 1
+        instance.save()
+        # TODO get from a player a resource
+        instance.catan_event.thief_tile = validated_data["tile"]
+        instance.catan_event.state = "dice"
+        instance.catan_event.save()
+
+        return instance
+
+    def create(self, validated_data):
+        pass
+
+
+class DiceSerializer(serializers.Serializer):
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+
+class HomeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Settlement
+        fields = ["vertex"]
+
+
+class CitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Settlement
+        fields = []
+
+
+class RoadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Road
+        pass
+
+
+class BuyDevelopmentCardSerializer(serializers.Serializer):
+
+    def update(self, instance, validated_data):
+        functions.pop_random_development_card(catan_event=instance.catan_event)
+        functions.pay_resources_for_buy(salable="development_card", player_game=validated_data["player_game"])
+
+    def create(self, validated_data):
+        pass
+
+    fields = ["vertex1", "vertex2"]

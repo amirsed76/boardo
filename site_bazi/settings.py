@@ -68,13 +68,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
 ]
-
 
 ROOT_URLCONF = 'site_bazi.urls'
 
@@ -197,8 +196,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "amirreza.seddighin1376@gmail.com"
-EMAIL_HOST_PASSWORD = "rbelpmjbttwhmgmt"
+EMAIL_HOST_USER = "boardo.ir@gmail.com"
+EMAIL_HOST_PASSWORD = "khkvdrorwtrunzap"
 # DEFAULT_FROM_EMAIL = "amirreza.seddighin1376@gmail.com"
 DEFAULT_FROM_EMAIL = "site_bazi"
 

@@ -14,16 +14,17 @@ class ChatConsumer(WebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
-        try:
-            players_id = [x["player"] for x in models.PlayerGame.objects.filter(
-                catan_event__event__room_name=self.room_name).values(
-                "player")]
+        # try:
+        #     players_id = [x["player"] for x in models.PlayerGame.objects.filter(
+        #         catan_event__event__room_name=self.room_name).values(
+        #         "player")]
+        #
+        #     if self.scope["user"].id in players_id:
+        #         self.accept()
+        # except:
+        #     pass
 
-            if self.scope["user"].id in players_id:
-                self.accept()
-        except:
-            pass
-
+        self.accept()
     def disconnect(self, close_code):
         # Leave room group
         async_to_sync(self.channel_layer.group_discard)(

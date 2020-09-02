@@ -28,6 +28,7 @@ class PlayerGame(models.Model):
     victory_point = models.IntegerField(default=0)
     knight = models.IntegerField(default=0)
     knight_card_played = models.IntegerField(default=0)
+    thief_tile = models.IntegerField(default=0)
 
     def next(self, reverse=False):
         if reverse:
@@ -70,8 +71,6 @@ class Settlement(models.Model):
         ("city", "city")
     }
     kind = models.CharField(max_length=4, choices=CHOICES)
-
-
 
 
 class Road(models.Model):
