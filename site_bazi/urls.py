@@ -21,8 +21,13 @@ from django.conf.urls.static import static
 from django.views.generic import TemplateView
 import registry.views as views
 
+...
+
+# schema_view = get_swagger_view(title="Swagger Docs")
+
 urlpatterns = \
     [
+        # url(r'^docs/', schema_view),
         path('admin/', admin.site.urls),
         path("auth/", include("registry.urls")),
         path("game/", include("board_game_site.urls")),

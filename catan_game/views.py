@@ -303,9 +303,12 @@ class DiceAPIView(APIView):
 
 
 class HomeCreateAPIView(generics.CreateAPIView):
-    permission_classes = []  # TODO permission for create home
+    permission_classes = [permissions.IsAuthenticated]  # TODO permission for create home
     queryset = models.Settlement.objects.all()
     serializers_class = serializers.HomeSerializer
+
+    def get_serializer_class(self):
+        return self.serializer_class
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -323,7 +326,7 @@ class HomeCreateAPIView(generics.CreateAPIView):
 
 
 class CityUpdateAPIView(generics.UpdateAPIView):
-    permission_classes = []  # TODO permission for create home
+    permission_classes = [permissions.IsAuthenticated]  # TODO permission for create home
     queryset = models.Settlement.objects.all()
     serializers_class = serializers.CitySerializer
 
