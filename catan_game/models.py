@@ -39,9 +39,9 @@ class PlayerGame(models.Model):
         for index, player in enumerate(players):
             if player == self.player:
                 if index == 3:
-                    return players[0].id
+                    return players[0].player.id
                 else:
-                    return players[index + 1].id
+                    return players[index + 1].player.id
 
     class Meta:
         unique_together = ["catan_event", "player"]
@@ -77,3 +77,26 @@ class Road(models.Model):
     player_game = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
     vertex1 = models.IntegerField()
     vertex2 = models.IntegerField()
+
+
+class Trade(models.Model):
+    player_game = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
+
+    brick_want = models.IntegerField(default=0)
+    sheep_want = models.IntegerField(default=0)
+    stone_want = models.IntegerField(default=0)
+    wheat_want = models.IntegerField(default=0)
+    wood_want = models.IntegerField(default=0)
+
+    brick_give = models.IntegerField(default=0)
+    sheep_give = models.IntegerField(default=0)
+    stone_give = models.IntegerField(default=0)
+    wheat_give = models.IntegerField(default=0)
+    wood_give = models.IntegerField(default=0)
+
+
+class TradAnswer(models.Model):
+    trade = models.ForeignKey("Trade", on_delete=models.CASCADE)
+    player = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
+    answer = models.BooleanField(default=False)
+    description = models.TextField(null=True, blank=True)

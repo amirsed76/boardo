@@ -90,14 +90,14 @@ class PlayerInformationSerializer(serializers.ModelSerializer):
     resources = serializers.SerializerMethodField("get_resources", read_only=True)
     point = serializers.SerializerMethodField("get_point", read_only=True)
     road_length = serializers.SerializerMethodField("get_road_length", read_only=True)
-    player_avatar = serializers.ImageField(source="player.avatar.avatar",read_only=True)
-    player_username = serializers.CharField(source="player.username",read_only=True)
+    player_avatar = serializers.ImageField(source="player.avatar.avatar", read_only=True)
+    player_username = serializers.CharField(source="player.username", read_only=True)
 
     class Meta:
         model = models.PlayerGame
 
-        fields = ["catan_event", "player", "has_long_road_card", "has_largest_army", "knight_card_played",
-                  "cards", "resources", "point", "road_length","player_avatar","player_username"]
+        fields = ["id", "catan_event", "player", "has_long_road_card", "has_largest_army", "knight_card_played",
+                  "cards", "resources", "point", "road_length", "player_avatar", "player_username"]
 
         read_only_fields = ["catan_event", "player", "has_long_road_card", "has_largest_army", "knight_card_played",
                             "cards", "resources", "point", "road_length"]
@@ -125,7 +125,7 @@ class PlayerInformationSerializer(serializers.ModelSerializer):
         return point
 
     def get_road_length(self, instance):
-        # TODO write function
+        functions.get_longest_road(instance)
         return 0
 
 
@@ -403,3 +403,76 @@ class BuyDevelopmentCardSerializer(serializers.Serializer):
         pass
 
     fields = ["vertex1", "vertex2"]
+
+
+# class Trade
+
+class GoodsSerializer(serializers.Serializer):
+    brick = serializers.IntegerField()
+    sheep = serializers.IntegerField()
+    stone = serializers.IntegerField()
+    wheat = serializers.IntegerField()
+    wood = serializers.IntegerField()
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        pass
+
+
+class TradeSerializer(serializers.Serializer):
+    give = GoodsSerializer()
+    want = GoodsSerializer()
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        player_game = validated_data["player_game"]
+        catan_event = player_game.catan_event
+        catan_event.state = "trade_question"
+        catan_event.save()
+        trade = models.Trade(player_game=player_game,
+                             brick_want=validated_data["want"]["brick"],
+                             sheep_want=validated_data["want"]["sheep"],
+                             stone_want=validated_data["want"]["stone"],
+                             wheat_want=validated_data["want"]["wheat"],
+                             wood_want=validated_data["want"]["wood"],
+                             brick_give=validated_data["give"]["brick"],
+                             sheep_give=validated_data["give"]["sheep"],
+                             stone_give=validated_data["give"]["stone"],
+                             wheat_give=validated_data["give"]["wheat"],
+                             wood_give=validated_data["give"]["wood"],
+                             ).save()
+        return trade
+
+
+class AnswerTrade(serializers.Serializer):
+    answer = serializers.BooleanField(default=False)
+    descriptions = serializers.CharField()
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        player_game = validated_data["player_game"]
+        catan_event = player_game.catan_event
+        catan_event.state = "trade_accept_reject"
+        catan_event = catan_event.save()
+
+        # trade = models.ForeignKey("Trade", on_delete=models.CASCADE)
+        # player = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
+        # answer = models.BooleanField(default=False)
+        # description = models.TextField(null=True, blank=True)
+
+        trad_answer = models.TradAnswer(
+            trade=models.Trade.object.filter(player_game__catan_event=player_game.catan_event).order_by('-id')[0],
+            player=player_game, answer=validated_data["answer"], description=validated_data["description"]).save()
+        return trad_answer
+
+
+class TradAnswerListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.TradAnswer
+        fields = "__all__"

@@ -247,8 +247,13 @@ def pay_resources_for_buy(salable, player_game):
     player_game.save()
 
 
-def send_message_status(catan_event, room_name):
-    send_message(room_name=room_name, message={"turn": catan_event.turn.id, "action": catan_event.state, "args": {}})
+def send_message_status(catan_event, room_name=None, turn=None):
+    if turn is None:
+        turn = catan_event.turn.id
+
+    if room_name is None:
+        room_name = catan_event.event.room_name
+    send_message(room_name=room_name, message={"turn": turn, "action": catan_event.state, "args": {}})
 
 
 def pop_random_development_card(catan_event: models.CatanEvent):
@@ -275,15 +280,18 @@ def pop_random_development_card(catan_event: models.CatanEvent):
 
 
 def check_finish(catan_event: models.CatanEvent):
-    for player in catan_event.playergame_set:
+    for player in catan_event.playergame_set.all():
         if get_point(player_game=player) >= 10:
+            catan_event.state = "finish"
+            catan_event.save()
+            # send_message_status(catan_event=catan_event, room_name=catan_event.event.room_name)
             return player
 
     return None
 
 
 def get_longest_road(player_game: models.PlayerGame):
-    roads = player_game.road_set
+    roads = player_game.road_set.all()
     DG = nx.DiGraph()
     for road in roads:
         DG.add_edge(road.vertex1, road.vertex2, weight=1)
@@ -364,3 +372,47 @@ def find_place_for_6_8():
             threshold -= 1
 
     return [x - 1 for x in result]
+
+
+def update_longest_road(catan_event: models.CatanEvent):
+    try:
+        player_has_longest_road = catan_event.playergame_set.get(has_long_road_card=True)
+        longest_road = get_longest_road(player_game=player_has_longest_road)
+    except:
+        player_has_longest_road = None
+        longest_road = 0
+    for player in catan_event.playergam_set.all():
+        player_road_length = get_longest_road(player)
+        if player_road_length > longest_road and player_road_length > 4:
+            if player_has_longest_road is not None:
+                player_has_longest_road.has_long_road_card = False
+                player_has_longest_road.save()
+            player_has_longest_road = player
+            longest_road = player_road_length
+            player.has_long_road_card = True
+            player.save()
+
+    return [player_has_longest_road, longest_road]
+
+
+def update_largest_army(catan_event: models.CatanEvent):
+    try:
+        player_has_largest_army = catan_event.playergame_set.get(has_largest_army=True)
+        largest_army = get_longest_road(player_game=player_has_largest_army)
+    except:
+        player_has_largest_army = None
+        largest_army = 0
+
+    for player in catan_event.playergame_set.all():
+        player_army = player.knight_card_played
+        if player_army > largest_army and player_army > 2:
+            if player_has_largest_army is not None:
+                player_has_largest_army.has_largest_army = False
+                player_has_largest_army.save()
+
+            player.has_largest_army = True
+            player.save()
+            player_has_largest_army = player
+            largest_army = player_army
+
+    return [player_has_largest_army, largest_army]

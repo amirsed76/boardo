@@ -208,6 +208,7 @@ class PlayRoadBuilding(APIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         serializer.is_valid(raise_exception=True)
         serializer.save(player_game=player_game)
+        functions.update_longest_road(catan_event=catan_event)
 
         data = request.data.copy()
         del data["csrfmiddlewaretoken"]
@@ -215,6 +216,7 @@ class PlayRoadBuilding(APIView):
             message={"action": "play_road_building",
                      "args": data},
             room_name=kwargs["room_name"])
+        functions.check_finish(catan_event=catan_event)
         functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
         return Response([], status=status.HTTP_200_OK)
 
@@ -255,12 +257,14 @@ class PlayKnightCard(APIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        functions.update_largest_army(catan_event=catan_event)
         data = request.data.copy()
         del data["csrfmiddlewaretoken"]
         functions.send_message(
             message={"action": "knight",
                      "args": data},
             room_name=kwargs["room_name"])
+        functions.check_finish(catan_event=catan_event)
         functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -313,14 +317,17 @@ class HomeCreateAPIView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        player_game = models.PlayerGame.objects.get(catan_event__event__room_name=kwargs["room_name"],
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        player_game = models.PlayerGame.objects.get(catan_event=catan_event,
                                                     player=self.request.user)
         serializer.save(kind="home", player_game=player_game)
-        # TODO is finish ?
         functions.pay_resources_for_buy(salable="home", player_game=player_game)
-        functions.send_message(room_name=kwargs["room_name"], message={"action": "build_home", "args": serializer.data})
-        headers = self.get_success_headers(serializer.data)
+        data = serializer.data.copy()
+        del data["csrfmiddlewaretoken"]
+        functions.send_message(room_name=kwargs["room_name"], message={"action": "build_home", "args": data})
+        functions.check_finish(catan_event=catan_event)
         functions.send_message_status(catan_event=player_game.catan_event, room_name=kwargs["room_name"])
+        headers = self.get_success_headers(serializer.data)
 
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -342,7 +349,12 @@ class CityUpdateAPIView(generics.UpdateAPIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         player_game = models.PlayerGame.objects.get(player=self.request.user, catan_event=catan_event)
         functions.pay_resources_for_buy(salable="city", player_game=player_game)
-        # TODO is_finish
+        data = serializer.data.copy()
+        del data["csrfmiddlewaretoken"]
+        functions.send_message(room_name=kwargs["room_name"], message={"action": "build_city", "args": serializer.data})
+        functions.check_finish(catan_event=catan_event)
+        functions.send_message_status(catan_event=player_game.catan_event, room_name=kwargs["room_name"])
+
         if getattr(instance, '_prefetched_objects_cache', None):
             instance._prefetched_objects_cache = {}
 
@@ -359,12 +371,16 @@ class RoadCreateAPIView(generics.CreateAPIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         player_game = models.PlayerGame.objects.get(player=self.request.user, catan_event=catan_event)
         serializer.save(player_game=player_game)
+        functions.update_longest_road(catan_event=catan_event)
         functions.pay_resources_for_buy(salable="road", player_game=player_game)
+        data = serializer.data.copy()
+        del data["csrfmiddlewaretoken"]
         functions.send_message(room_name=kwargs["room_name"], message={
             "action": "build_road",
-            "args": serializer.data
+            "args": data
         })
-
+        functions.check_finish(catan_event=catan_event)
+        functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -382,10 +398,105 @@ class BuyDevelopmentCard(APIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        data = serializer.data.copy()
+        del data["csrfmiddlewaretoken"]
         functions.send_message(
             message={"action": "buy_development_card",
-                     "args": {}},
+                     "args": data},
             room_name=kwargs["room_name"])
+        functions.check_finish(catan_event=catan_event)
         functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
-        # TODO check finish
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class TradAPIView(generics.CreateAPIView):
+    serializer_class = serializers.TradeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        try:
+            catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+            player_game = models.PlayerGame.objects.get(catan_event=catan_event, player=self.request.user)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(player_game=player_game)
+
+            data = serializer.data.copy()
+            del data["csrfmiddlewaretoken"]
+            data["id"] = serializer["id"]
+            functions.send_message(
+                message={"action": "trade",
+                         "args": data},
+
+                room_name=kwargs["room_name"])
+
+            functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
+
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except:
+            pass
+
+
+class AnswerTradeCreateAPIView(generics.CreateAPIView):
+    # serializer_class = serializers.Tra
+    permission_classes = [permissions.IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(catan_event=catan_event)
+        data = serializer.data.copy()
+        del data["csrfmiddlewaretoken"]
+        functions.send_message(
+            message={"action": "trade_answer",
+                     "args": data},
+
+            room_name=kwargs["room_name"])
+
+        functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class AnswerListAPIView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.TradAnswerListSerializer
+
+    def get_queryset(self):
+        models.TradAnswer.objects.all()
+
+    def list(self, request, *args, **kwargs):
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        trade = models.Trade.objects.filter(player_game__catan_event=catan_event).order_by("-id")[0]
+        queryset = models.TradAnswer.objects.filter(trade=trade)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class AcceptRejectAnswerTrade(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        # trade_answer=
+
+
+class EndRound(APIView):
+
+    def post(self, request, *args, **kwargs):
+        catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
+        player_game = models.PlayerGame.objects.get(catan_event=catan_event, player=self.request.user)
+        catan_event.state("play_development_card")
+        catan_event.turn = player_game.next()
+        catan_event.save()
+        functions.send_message(room_name=kwargs["room_name"], message={"action": "end_round", "args": {}})
+        functions.send_message_status(catan_event=catan_event)
+        return Response(status=status.HTTP_200_OK)

@@ -3,7 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('<str:room_name>/', views.room, name='room'),
+    # path('<str:room_name>/', views.room, name='room'),
     path("create_server", views.CatanEventCreateApiView.as_view()),
     path("server/<str:room_name>", views.LoginGameAPIView.as_view()),
     path("map/<str:room_name>", views.TileListAPIVIew.as_view()),
@@ -17,6 +17,8 @@ urlpatterns = [
     path("create_home/<str:room_name>", views.HomeCreateAPIView.as_view()),
     path("create_city/<str:room_name>/<int:pk>", views.CityUpdateAPIView.as_view()),
     path("create_road/<str:room_name>", views.RoadCreateAPIView.as_view()),
+    path("trade/<str:room_name>", views.TradAPIView.as_view()),
+    path("end/<str:room_name>", views.EndRound.as_view())
     # TODO buy development card
     # TODO trad
 ]
