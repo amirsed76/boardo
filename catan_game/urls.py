@@ -14,11 +14,15 @@ urlpatterns = [
     path("play_year_of_plenty/<str:room_name>", views.PlayYearOfPlenty.as_view()),
     path("play_road_building/<str:room_name>", views.PlayRoadBuilding.as_view()),
     path("play_monopoly/<str:room_name>", views.PlayMonopoly.as_view()),
+    path("dice/<str:room_name>", views.DiceAPIView.as_view()),
+
     path("create_home/<str:room_name>", views.HomeCreateAPIView.as_view()),
     path("create_city/<str:room_name>/<int:pk>", views.CityUpdateAPIView.as_view()),
     path("create_road/<str:room_name>", views.RoadCreateAPIView.as_view()),
     path("trade/<str:room_name>", views.TradAPIView.as_view()),
-    path("end/<str:room_name>", views.EndRound.as_view())
+    path("trade_bank/<str:room_name>", views.BankTrade.as_view()),
+
+    path("end/<str:room_name>", views.EndRound.as_view()),
     # TODO buy development card
     # TODO trad
 ]

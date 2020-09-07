@@ -40,9 +40,11 @@ class CatanEventSerializer(serializers.ModelSerializer):
         self.update(instance=instance, validated_data={"turn": user})
 
 
-class PlayerGameSerializer(serializers.ModelSerializer):
+class PersonalSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     point = serializers.SerializerMethodField(read_only=True, method_name="get_point")
+    player_avatar = serializers.ImageField(source="player.avatar.avatar", read_only=True)
+    player_username = serializers.CharField(source="player.username", read_only=True)
 
     class Meta:
         model = models.PlayerGame
@@ -70,7 +72,7 @@ class PlayerGameSerializer(serializers.ModelSerializer):
                                               "is_winner": False}
         board_game_serializers.UserGameSerializer().create(user_game_serializer_validate_data)
         del self.validated_data["password"]
-        return super(PlayerGameSerializer, self).save(**kwargs)
+        return super(PersonalSerializer, self).save(**kwargs)
 
 
 class TileSerializer(serializers.ModelSerializer):
@@ -390,7 +392,8 @@ class CitySerializer(serializers.ModelSerializer):
 class RoadSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Road
-        pass
+        fields = "__all__"
+        read_only_fields = ["player_game"]
 
 
 class BuyDevelopmentCardSerializer(serializers.Serializer):
@@ -433,6 +436,7 @@ class TradeSerializer(serializers.Serializer):
         catan_event = player_game.catan_event
         catan_event.state = "trade_question"
         catan_event.save()
+        print(validated_data)
         trade = models.Trade(player_game=player_game,
                              brick_want=validated_data["want"]["brick"],
                              sheep_want=validated_data["want"]["sheep"],
@@ -444,7 +448,8 @@ class TradeSerializer(serializers.Serializer):
                              stone_give=validated_data["give"]["stone"],
                              wheat_give=validated_data["give"]["wheat"],
                              wood_give=validated_data["give"]["wood"],
-                             ).save()
+                             )
+        trade.save()
         return trade
 
 
@@ -476,3 +481,25 @@ class TradAnswerListSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.TradAnswer
         fields = "__all__"
+
+
+class BankTradSerializer(serializers.Serializer):
+    CHOICES = {("brick", "brick"),
+               ("sheep", "sheep"),
+               ("stone", "stone"),
+               ("wheat", "wheat"),
+               ("wood", "wood")}
+    give = serializers.ChoiceField(choices=CHOICES, write_only=True)
+    want = serializers.ChoiceField(choices=CHOICES, write_only=True)
+
+    def update(self, instance, validated_data):
+        pass
+
+    def create(self, validated_data):
+        player_game = validated_data["player_game"]
+        catan_event = player_game.catan_event
+        catan_event.state = "trade_buy_build"
+        catan_event = catan_event.save()
+        functions.change_player_resource(player=player_game, resource=validated_data["give"], count=-4)
+        functions.change_player_resource(player=player_game, resource=validated_data["want"], count=1)
+        return catan_event

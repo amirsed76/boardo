@@ -26,6 +26,34 @@ class GameRetrieveAPIView(generics.RetrieveAPIView):
         serializer_class = self.get_serializer_class()
         kwargs['context'] = self.get_serializer_context()
         return serializer_class(*args, **kwargs)
-    # def get_serializer_class(self):
-    # def retrieve(self, request, *args, **kwargs):
 
+
+class CommentCreateAPIView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = serializers.CommentSerializer
+    queryset = models.GameComment.objects.filter(status="a")
+
+    def create(self, request, *args, **kwargs):
+        event = models.GameEvent.objects.get(room_name=kwargs["room_name"])
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user_game=models.UserGame.objects.get(game_event=event, user=self.request.user))
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class VoteCreateAPIView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = models.GameVote.objects.all()
+    serializer_class = serializers.VoteSerializer
+
+    def create(self, request, *args, **kwargs):
+        event = models.GameEvent.objects.get(room_name=kwargs["room_name"])
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user_game=models.UserGame.objects.get(game_event=event, user=self.request.user))
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

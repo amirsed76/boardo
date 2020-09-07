@@ -80,7 +80,7 @@ def get_tiles():
 def finish_game(catan_event):
     queryset = models.PlayerGame.objects.filter(catan_event=catan_event)
     for instance in queryset:
-        serializer = serializers.PlayerGameSerializer(instance=instance)
+        serializer = serializers.PersonalSerializer(instance=instance)
         if serializer.data["point"] >= 10:
             return instance
 
@@ -416,3 +416,5 @@ def update_largest_army(catan_event: models.CatanEvent):
             largest_army = player_army
 
     return [player_has_largest_army, largest_army]
+
+

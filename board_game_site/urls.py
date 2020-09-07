@@ -10,6 +10,8 @@ urlpatterns = \
     [
         path('games/', views.GameListAPIVies.as_view()),
         path('games/<int:pk>', views.GameRetrieveAPIView.as_view()),
+        path('comment/<str:room_name>',views.CommentCreateAPIView.as_view()),
+        path('vote/<str:room_name>',views.VoteCreateAPIView.as_view())
         # path('chat/', include('chat.urls')),
 
     ]

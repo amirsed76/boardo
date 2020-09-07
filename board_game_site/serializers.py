@@ -21,7 +21,7 @@ class GameSerializer(serializers.ModelSerializer):
 class CommentSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source="user_game.user", read_only=True)
     # user_avatar = serializers.ImageField(source="user_game.user.avatar.avatar", read_only=True)
-    user_avatar = serializers.SerializerMethodField(read_only=True , method_name="get_image")
+    user_avatar = serializers.SerializerMethodField(read_only=True, method_name="get_image")
 
     class Meta:
         model = models.GameComment
@@ -44,7 +44,7 @@ class GameDetailSerializer(GameSerializer):
 
     def get_comments(self, instance):
         qs = models.GameComment.objects.filter(status="a", user_game__game_event__game=instance)
-        serializer = CommentSerializer(instance=qs, many=True,context=self.context)
+        serializer = CommentSerializer(instance=qs, many=True, context=self.context)
         return serializer.data
 
     def get_mean_vote(self, obj):
@@ -67,3 +67,10 @@ class GameEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.GameEvent
         fields = "__all__"
+
+
+class VoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.GameVote
+        fields = "__all__"
+        read_only_fields = ["user_game"]
