@@ -399,16 +399,19 @@ class RoadSerializer(serializers.ModelSerializer):
 class BuyDevelopmentCardSerializer(serializers.Serializer):
 
     def update(self, instance, validated_data):
-        functions.pop_random_development_card(catan_event=instance.catan_event)
-        functions.pay_resources_for_buy(salable="development_card", player_game=validated_data["player_game"])
+        player_game = validated_data["player_game"]
+        player_game: models.PlayerGame
+        if functions.event_development_card_count(catan_event=player_game.catan_event) > 0:
+            functions.pay_resources_for_buy(salable="development_card", player_game=validated_data["player_game"])
+            card = functions \
+                .pop_random_development_card(catan_event=instance.catan_event)
+            return card
+        else:
+            raise Exception("all card is finish")
 
     def create(self, validated_data):
         pass
 
-    fields = ["vertex1", "vertex2"]
-
-
-# class Trade
 
 class GoodsSerializer(serializers.Serializer):
     brick = serializers.IntegerField()
@@ -436,7 +439,6 @@ class TradeSerializer(serializers.Serializer):
         catan_event = player_game.catan_event
         catan_event.state = "trade_question"
         catan_event.save()
-        print(validated_data)
         trade = models.Trade(player_game=player_game,
                              brick_want=validated_data["want"]["brick"],
                              sheep_want=validated_data["want"]["sheep"],
@@ -499,7 +501,9 @@ class BankTradSerializer(serializers.Serializer):
         player_game = validated_data["player_game"]
         catan_event = player_game.catan_event
         catan_event.state = "trade_buy_build"
-        catan_event = catan_event.save()
+        catan_event.save()
+        if not functions.has_resource(player=player_game, resource=validated_data["give"], count=4):
+            raise Exception("amount not enough")
         functions.change_player_resource(player=player_game, resource=validated_data["give"], count=-4)
         functions.change_player_resource(player=player_game, resource=validated_data["want"], count=1)
         return catan_event

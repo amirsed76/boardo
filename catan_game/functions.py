@@ -242,9 +242,9 @@ def get_need_resources(salable: str):
 def pay_resources_for_buy(salable, player_game):
     needed_resources = get_need_resources(salable=salable)
     for resource in needed_resources:
+        if not has_resource(player=player_game, resource=resource, count=needed_resources.count(resource)):
+            raise Exception("not enough goods")
         change_player_resource(player=player_game, resource=resource, count=-1, save=False)
-
-    player_game.save()
 
 
 def send_message_status(catan_event, room_name=None, turn=None):
@@ -277,6 +277,7 @@ def pop_random_development_card(catan_event: models.CatanEvent):
         catan_event.all_victory_card -= 1
 
     catan_event.save()
+    return card
 
 
 def check_finish(catan_event: models.CatanEvent):
@@ -416,5 +417,58 @@ def update_largest_army(catan_event: models.CatanEvent):
             largest_army = player_army
 
     return [player_has_largest_army, largest_army]
+
+
+# def trade(tra):
+def has_resource(player, resource, count):
+    if resource == "brick":
+        return player.brick_count >= count
+
+    elif resource == "sheep":
+        return player.sheep_count >= count
+
+
+    elif resource == "stone":
+        return player.stone_count >= count
+
+
+    elif resource == "wheat":
+        return player.wheat_count >= count
+
+
+    elif resource == "wood":
+        return player.wood_count >= count
+
+    return False
+
+
+def event_development_card_count(catan_event: models.CatanEvent):
+    return catan_event.all_knight_card + catan_event.all_victory_card + catan_event.all_year_of_plenty \
+           + catan_event.all_road_building + catan_event.all_monopoly_card
+
+
+def do_deal(trade_answer: models.TradAnswer):
+    trade = trade_answer.trade
+    change_player_resource(player=trade.player_game, resource="wood", count=trade.wood_give - trade.wood_give,
+                           save=True)
+    change_player_resource(player=trade.player_game, resource="brick", count=trade.brick_want - trade.brick_give,
+                           save=True)
+    change_player_resource(player=trade.player_game, resource="stone", count=trade.stone_want - trade.stone_give,
+                           save=True)
+    change_player_resource(player=trade.player_game, resource="sheep", count=trade.sheep_want - trade.sheep_give,
+                           save=True)
+    change_player_resource(player=trade.player_game, resource="wheat", count=trade.wheat_want - trade.wheat_give,
+                           save=True)
+
+    change_player_resource(player=trade_answer.player, resource="wood", count=-trade.wood_give + trade.wood_give,
+                           save=True)
+    change_player_resource(player=trade_answer.player, resource="brick", count=-trade.brick_want + trade.brick_give,
+                           save=True)
+    change_player_resource(player=trade_answer.player, resource="stone", count=-trade.stone_want + trade.stone_give,
+                           save=True)
+    change_player_resource(player=trade_answer.player, resource="sheep", count=-trade.sheep_want + trade.sheep_give,
+                           save=True)
+    change_player_resource(player=trade_answer.player, resource="wheat", count=-trade.wheat_want + trade.wheat_give,
+                           save=True)
 
 

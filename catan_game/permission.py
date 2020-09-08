@@ -6,11 +6,6 @@ from rest_framework.views import APIView
 permission_active = False
 
 
-#
-#
-# permission_active = False
-
-
 class TestPermission(BasePermission):
 
     def has_permission(self, request, view):
