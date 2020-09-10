@@ -248,11 +248,16 @@ def pay_resources_for_buy(salable, player_game):
 
 
 def send_message_status(catan_event, room_name=None, turn=None):
+    if catan_event.state == "finish":
+        return
     if turn is None:
         turn = catan_event.turn.id
 
     if room_name is None:
-        room_name = catan_event.event.room_name
+        room_name = str(catan_event.event.room_name)
+
+    print(room_name)
+
     send_message(room_name=room_name, message={"turn": turn, "action": catan_event.state, "args": {}})
 
 
@@ -285,6 +290,11 @@ def check_finish(catan_event: models.CatanEvent):
         if get_point(player_game=player) >= 10:
             catan_event.state = "finish"
             catan_event.save()
+            send_message(room_name=catan_event.event.room_name,message={
+                "winner":player.id,
+                "action":"finish",
+                "args":{}
+            })
             # send_message_status(catan_event=catan_event, room_name=catan_event.event.room_name)
             return player
 

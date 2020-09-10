@@ -30,14 +30,14 @@ class PlayerGame(models.Model):
     knight_card_played = models.IntegerField(default=0)
     thief_tile = models.IntegerField(default=0)
 
-    def next(self, reverse=False):
+    def next_player(self, reverse=False):
         if reverse:
             players = PlayerGame.objects.filter(catan_event=self.catan_event).reverse()
         else:
             players = PlayerGame.objects.filter(catan_event=self.catan_event)
 
         for index, player in enumerate(players):
-            if player == self.player:
+            if player.id == self.player.id:
                 if index == 3:
                     return players[0].player.id
                 else:
@@ -98,5 +98,5 @@ class Trade(models.Model):
 class TradAnswer(models.Model):
     trade = models.ForeignKey("Trade", on_delete=models.CASCADE)
     player = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
-    answer = models.BooleanField(default=False)
+    # answer = models.BooleanField(default=False)
     description = models.TextField(null=True, blank=True)

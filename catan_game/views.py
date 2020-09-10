@@ -180,6 +180,7 @@ class Init1APIView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         try:
+            print(request.data)
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
@@ -192,7 +193,7 @@ class Init1APIView(generics.CreateAPIView):
             functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        except:
+        except Exception as e :
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
@@ -242,7 +243,8 @@ class Init2APIView(generics.CreateAPIView):
             functions.send_message_status(catan_event=catan_event)
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        except:
+        except Exception as e :
+            raise e
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
@@ -320,7 +322,8 @@ class PlayRoadBuilding(APIView):
         data = request.data.copy()
         del data["csrfmiddlewaretoken"]
         functions.send_message(
-            message={"action": "play_road_building",
+            message={"turn": self.request.user.id,
+                     "action": "play_road_building",
                      "args": data},
             room_name=kwargs["room_name"])
         functions.check_finish(catan_event=catan_event)
@@ -361,7 +364,8 @@ class PlayMonopoly(APIView):
         data = request.data.copy()
         del data["csrfmiddlewaretoken"]
         functions.send_message(
-            message={"action": "monopoly",
+            message={"turn": self.request.user.id,
+                     "action": "play_monopoly",
                      "args": data},
             room_name=kwargs["room_name"])
         functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
@@ -401,7 +405,8 @@ class PlayKnightCard(APIView):
         data = request.data.copy()
         del data["csrfmiddlewaretoken"]
         functions.send_message(
-            message={"action": "knight",
+            message={"turn": self.request.user.id,
+                     "action": "play_knight_card",
                      "args": data},
             room_name=kwargs["room_name"])
         functions.check_finish(catan_event=catan_event)
@@ -427,22 +432,17 @@ class DiceAPIView(APIView):
             catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
             dice1 = random.randint(1, 6)
             dice2 = random.randint(1, 6)
-            functions.send_message(room_name=kwargs["room_name"], message={
-                "action": "dice", "args": {"dice1": dice1, "dice2": dice2}
-            })
-            # TODO send each player allocated resources
             if dice1 + dice2 != 7:
                 tiles = models.Tile.objects.filter(number=dice1 + dice2)
                 for tile in tiles:
                     functions.allocate_resource(tile=tile)
 
                 functions.send_message(room_name=kwargs["room_name"], message={
-                    "action": "dice", "args": {"dice1": dice1, "dice2": dice2}
+                    "turn": self.request.user.id,
+                    "action": "played_dice", "args": {"dice1": dice1, "dice2": dice2}
                 })
                 catan_event.state = "trade_buy_build"
                 catan_event.save()
-                # functions.send_message(room_name=kwargs["room_name"],)
-                # TODO send to all state
 
             else:
                 functions.robbed(catan_event=catan_event)
@@ -487,7 +487,8 @@ class HomeCreateAPIView(generics.CreateAPIView):
             serializer.save(kind="home", player_game=player_game)
             data = request.data.copy()
             del data["csrfmiddlewaretoken"]
-            functions.send_message(room_name=kwargs["room_name"], message={"action": "build_home", "args": data})
+            functions.send_message(room_name=kwargs["room_name"],
+                                   message={"turn": self.request.user.id, "action": "build_home", "args": data})
             functions.check_finish(catan_event=catan_event)
             functions.send_message_status(catan_event=player_game.catan_event, room_name=kwargs["room_name"])
             headers = self.get_success_headers(serializer.data)
@@ -531,7 +532,8 @@ class CityUpdateAPIView(generics.UpdateAPIView):
             data = request.data.copy()
             del data["csrfmiddlewaretoken"]
             functions.send_message(room_name=kwargs["room_name"],
-                                   message={"action": "build_city", "args": serializer.data})
+                                   message={"turn": self.request.user.id, "action": "build_city",
+                                            "args": {"vertex": instance.vertex}})
             functions.check_finish(catan_event=catan_event)
             functions.send_message_status(catan_event=player_game.catan_event, room_name=kwargs["room_name"])
         except:
@@ -568,6 +570,7 @@ class RoadCreateAPIView(generics.CreateAPIView):
             data = request.data.copy()
             del data["csrfmiddlewaretoken"]
             functions.send_message(room_name=kwargs["room_name"], message={
+                "turn": self.request.user.id,
                 "action": "build_road",
                 "args": data
             })
@@ -603,7 +606,8 @@ class BuyDevelopmentCard(APIView):
             serializer.is_valid(raise_exception=True)
             card = serializer.save(player_game=player_game)
             functions.send_message(
-                message={"action": "buy_development_card",
+                message={"turn": self.request.user.id,
+                         "action": "bought_development_card",
                          "args": {}},
                 room_name=kwargs["room_name"])
             functions.check_finish(catan_event=catan_event)
@@ -636,20 +640,15 @@ class TradAPIView(generics.CreateAPIView):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(player_game=player_game)
-
-            # data = request.data.copy()
-            # try:
-            #     del data["csrfmiddlewaretoken"]
-            # except:
-            #     pass
-            # data["id"] = serializer["id"]
             functions.send_message(
-                message={"action": "trade",
-                         "args": request.data},
+                message={
+                    "turn": self.request.user.id,
+                    "action": "trade_offer",
+                    "args": request.data},
 
                 room_name=kwargs["room_name"])
 
-            functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
+            # functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
 
             return Response(status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -659,20 +658,32 @@ class TradAPIView(generics.CreateAPIView):
 
 
 class AnswerTradeCreateAPIView(generics.CreateAPIView):
-    # serializer_class = serializers.Tra
+    serializer_class = serializers.TradeSerializer
     # TODO Permission
     permission_classes = [permissions.IsAuthenticated]
+
+    def initial(self, request, *args, **kwargs):
+        try:
+            super(AnswerTradeCreateAPIView, self).initial(request, *args, **kwargs)
+            if not permission.IsUserTurn().has_object_permission(request=request, view=self,
+                                                                 obj=models.CatanEvent.objects.get(
+                                                                     event__room_name=kwargs["room_name"])):
+                self.permission_denied(
+                    request, message=getattr(permission, 'message', None)
+                )
+        except:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
     def create(self, request, *args, **kwargs):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(catan_event=catan_event)
-        data = request.data.copy()
-        del data["csrfmiddlewaretoken"]
         functions.send_message(
-            message={"action": "trade_answer",
-                     "args": data},
+            message={
+                "player": self.request.user.id,
+                "action": "answered_trade",
+                "args": serializer.data},
 
             room_name=kwargs["room_name"])
 
@@ -704,6 +715,18 @@ class AnswerListAPIView(generics.ListAPIView):
 
 class AcceptAnswerTrade(APIView):
     permission_classes = [permissions.IsAuthenticated]
+
+    def initial(self, request, *args, **kwargs):
+        try:
+            super(AcceptAnswerTrade, self).initial(request, *args, **kwargs)
+            if not permission.IsUserTurn().has_object_permission(request=request, view=self,
+                                                                 obj=models.CatanEvent.objects.get(
+                                                                     event__room_name=kwargs["room_name"])):
+                self.permission_denied(
+                    request, message=getattr(permission, 'message', None)
+                )
+        except:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request, *args, **kwargs):
         try:
@@ -756,8 +779,10 @@ class BankTrade(APIView):
                 return Response(status=status.HTTP_400_BAD_REQUEST)
             data = request.data.copy()
             functions.send_message(
-                message={"action": "trade_bank",
-                         "args": data},
+                message={
+                    "turn": self.request.user.id,
+                    "action": "trade_bank",
+                    "args": data},
                 room_name=kwargs["room_name"])
             functions.send_message_status(catan_event=catan_event, room_name=kwargs["room_name"])
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -779,8 +804,7 @@ class EndRound(APIView):
         catan_event = models.CatanEvent.objects.get(event__room_name=kwargs["room_name"])
         player_game = models.PlayerGame.objects.get(catan_event=catan_event, player=self.request.user)
         catan_event.state = "play_development_card"
-        catan_event.turn = player_game.next()
+        catan_event.turn = player_game.next_player()
         catan_event.save()
-        functions.send_message(room_name=kwargs["room_name"], message={"action": "end_round", "args": {}})
         functions.send_message_status(catan_event=catan_event)
         return Response(status=status.HTTP_200_OK)

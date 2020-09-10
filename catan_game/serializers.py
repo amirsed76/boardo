@@ -33,7 +33,7 @@ class CatanEventSerializer(serializers.ModelSerializer):
         return instance
 
     def update_state(self, instance, state):
-        self.update(instance=instance, validated_data={"state": state})
+        instance=self.update(instance=instance, validated_data={"state": state})
 
     def update_turn(self, instance, user_id):
         user = registry_models.User.objects.get(pk=user_id)
@@ -158,7 +158,7 @@ class Init1ActionSerializer(serializers.ModelSerializer):
             turn = validated_data["player_game"].player.id
         else:
             state = "init1"
-            turn = validated_data["player_game"].next()
+            turn = validated_data["player_game"].next_player()
 
         CatanEventSerializer().update_state(instance=home_instance.player_game.catan_event, state=state)
         CatanEventSerializer().update_turn(instance=home_instance.player_game.catan_event, user_id=turn)
@@ -194,7 +194,7 @@ class Init2ActionSerializer(serializers.ModelSerializer):
             turn = validated_data["player_game"].player.id
         else:
             state = "init2"
-            turn = validated_data["player_game"].next(reverse=True)
+            turn = validated_data["player_game"].next_player(reverse=True)
 
         CatanEventSerializer().update_state(instance=home_instance.player_game.catan_event, state=state)
         CatanEventSerializer().update_turn(instance=home_instance.player_game.catan_event, user_id=turn)
@@ -437,7 +437,7 @@ class TradeSerializer(serializers.Serializer):
     def create(self, validated_data):
         player_game = validated_data["player_game"]
         catan_event = player_game.catan_event
-        catan_event.state = "trade_question"
+        catan_event.state = "answer_trade"
         catan_event.save()
         trade = models.Trade(player_game=player_game,
                              brick_want=validated_data["want"]["brick"],
@@ -455,27 +455,20 @@ class TradeSerializer(serializers.Serializer):
         return trade
 
 
-class AnswerTrade(serializers.Serializer):
-    answer = serializers.BooleanField(default=False)
-    descriptions = serializers.CharField()
-
-    def update(self, instance, validated_data):
-        pass
+class AnswerTrade(serializers.ModelSerializer):
+    class Meta:
+        model = models.TradAnswer
+        fields = ["answer", "id"]
 
     def create(self, validated_data):
         player_game = validated_data["player_game"]
         catan_event = player_game.catan_event
-        catan_event.state = "trade_accept_reject"
-        catan_event = catan_event.save()
-
-        # trade = models.ForeignKey("Trade", on_delete=models.CASCADE)
-        # player = models.ForeignKey("PlayerGame", on_delete=models.CASCADE)
-        # answer = models.BooleanField(default=False)
-        # description = models.TextField(null=True, blank=True)
+        catan_event.save()
 
         trad_answer = models.TradAnswer(
             trade=models.Trade.object.filter(player_game__catan_event=player_game.catan_event).order_by('-id')[0],
-            player=player_game, answer=validated_data["answer"], description=validated_data["description"]).save()
+            player=player_game, answer=validated_data["answer"])
+        trad_answer.save()
         return trad_answer
 
 
